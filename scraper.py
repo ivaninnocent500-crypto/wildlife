@@ -14,36 +14,34 @@ async def run_scraper():
     supabase: Client = create_client(url, key)
     print("🚀 Connection Established. Searching for sightings...")
 
-    # 2. THE SCRAPER LOGIC
-    # For now, we are simulating found data. 
-    # You can replace 'found_data' with your specific scraping results.
+    # 1. NEW DATA with Location Coordinates
+    # Format: "POINT(longitude latitude)"
     found_data = [
         {
-            "source": "Social Media Scraper",
-            "source_url": "https://example.com/post/123",
-            "content": "Large male Lion spotted near Seronera water hole!",
+            "source": "Social Media",
+            "source_url": "https://example.com/lion1",
+            "content": "Lion near Seronera",
             "extracted_species": "Lion",
-            "confidence_score": 0.95
+            "confidence_score": 0.95,
+            "location": "POINT(34.8233 -2.3333)" # Serengeti Coordinates
         },
         {
-            "source": "Park Report",
-            "source_url": "https://example.com/report/456",
-            "content": "Group of 3 Cheetahs moving North from Naabi Gate.",
-            "extracted_species": "Cheetah",
-            "confidence_score": 0.88
+            "source": "Guide Report",
+            "source_url": "https://example.com/leopard1",
+            "content": "Leopard in Ngorongoro",
+            "extracted_species": "Leopard",
+            "confidence_score": 0.88,
+            "location": "POINT(35.5873 -3.2458)" # Ngorongoro Coordinates
         }
     ]
 
-    # 3. Insert into Supabase
     for sighting in found_data:
         try:
-            # This matches your SQL table: crowdsourced_reports
-            response = supabase.table("crowdsourced_reports").upsert(sighting).execute()
-            print(f"✅ Synced: {sighting['extracted_species']} from {sighting['source']}")
+            # Upsert will now fill the 'location' column
+            supabase.table("crowdsourced_reports").upsert(sighting).execute()
+            print(f"✅ Synced {sighting['extracted_species']} with Location!")
         except Exception as e:
-            print(f"⚠️ Failed to sync sighting: {e}")
-
-    print("🏁 Scraper cycle complete.")
+            print(f"⚠️ Sync failed: {e}")
 
 if __name__ == "__main__":
     asyncio.run(run_scraper())
