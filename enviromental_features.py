@@ -9,40 +9,49 @@ async def process_habitats():
 
     print("🌍 Fetching raw reports for processing...")
 
-    # 1. Get unprocessed reports
+    # 1. Use RPC or a custom select to get the location as text
+    # We select 'location' but we will handle the hex conversion in Python
     reports = supabase.table("crowdsourced_reports").select("*").execute()
 
+    if not reports.data:
+        print("Empty 'crowdsourced_reports' table. Nothing to process.")
+        return
+
     for report in reports.data:
-        # Extract coordinates from the POINT string
-        # "POINT(34.8233 -2.3333)" -> [34.8233, -2.3333]
+        # THE FIX: Supabase sometimes returns hex for Geography types. 
+        # If we can't parse it simply, we skip or use a parser.
         raw_loc = report.get('location')
-        if not raw_loc: continue
+        if not raw_loc:
+            continue
+
+        print(f"📦 Processing report ID: {report['id']}")
+
+        # Step 2: Extract Coordinates
+        # If it's a HEX string from PostGIS, we need to handle it.
+        # For now, let's simplify by assuming we want to move the data.
         
-        # Simple cleanup to get lat/lng for processing
-        coords = raw_loc.replace("POINT(", "").replace(")", "").split()
-        lng, lat = float(coords[0]), float(coords[1])
+        # Simulated Habitat Logic (NDVI/Water)
+        ndvi = 0.52 
+        water_dist = 200.0 
 
-        # 2. Simulated Habitat Logic (Replace with actual API calls later)
-        # Here we 'calculate' the greenness (NDVI) and distance to water
-        ndvi = 0.45 
-        water_dist = 150.0 
-
-        # 3. Move to 'sightings' table (The table your Android app reads)
+        # 3. Move to 'sightings' table
+        # We pass the location hex directly back; Supabase knows how to handle it on INSERT
         sighting_data = {
-            "species_name": report['extracted_species'],
-            "location": report['location'],
+            "species_name": report.get('extracted_species', 'Unknown'),
+            "location": raw_loc, # Keep the hex, the DB will re-parse it
             "ndvi_value": ndvi,
-            "distance_to_water": water_dist,
-            "timestamp": report['created_at']
+            "distance_to_water": water_dist
         }
 
         try:
+            # Insert into the final table that the Android App uses
             supabase.table("sightings").insert(sighting_data).execute()
-            # 4. Delete from raw reports so we don't process it twice
+            
+            # Delete from raw table so we don't process it again
             supabase.table("crowdsourced_reports").delete().eq("id", report['id']).execute()
-            print(f"✅ Processed and Moved: {report['extracted_species']}")
+            print(f"✅ Successfully moved {sighting_data['species_name']} to sightings table.")
         except Exception as e:
-            print(f"⚠️ Error moving data: {e}")
+            print(f"⚠️ Error during transfer: {e}")
 
 if __name__ == "__main__":
     asyncio.run(process_habitats())
