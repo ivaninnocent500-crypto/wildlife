@@ -8,7 +8,7 @@ from shapely.geometry import Point
 import logging
 
 # Set up logging for GitHub Actions
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Configuration ---
 # Bounding box for East & Southern Africa (approx.)
