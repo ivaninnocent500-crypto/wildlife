@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Bounding box for East & Southern Africa (approx.)
 # Format: min_longitude, min_latitude, max_longitude, max_latitude
 AFRICA_BBOX = "20,-35,42,5" # Covers all your requested countries
-COUNTRIES = ["TZ", "KE", "UG", "BW", "ZM", "ZW", "MZ", "ZA"] # ISO country codes
+COUNTRIES =["TZ", "KE", "UG", "BW", "ZM", "ZW", "MZ", "ZA", "NA"] # ISO country codes
 
 # API Endpoints
 INATURALIST_API = "https://api.inaturalist.org/v1/observations"
