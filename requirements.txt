@@ -5,5 +5,5 @@ pandas
 numpy
 requests
 geopandas
-
+shapely # For handling geometry
 
