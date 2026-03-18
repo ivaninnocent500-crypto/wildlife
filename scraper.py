@@ -3,6 +3,8 @@ import requests
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 import logging
+import uuid
+import random
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,150 +21,136 @@ class RealWildlifeScraper:
         logging.info("🚀 Supabase client initialized.")
 
     def fetch_inaturalist(self):
-        """Fetch from iNaturalist with working parameters."""
+        """Fetch from iNaturalist."""
         sightings = []
         
         logging.info("🌍 Fetching from iNaturalist...")
         
-        # Use a broader search that definitely returns results
-        params = {
-            "verifiable": "true",
-            "geo": "true",
-            "per_page": 100,
-            "order_by": "observed_on",
-            "taxon_name": "Panthera leo,Loxodonta africana,Giraffa camelopardalis,Equus quagga", # Specific species
-            "swlat": -35, "swlng": 10, 
-            "nelat": 10, "nelng": 45, # Wider Africa bounds
-            "popular": "true"
+        # Safari animal scientific names
+        safari_species = {
+            "lion": "Panthera leo",
+            "elephant": "Loxodonta africana",
+            "giraffe": "Giraffa camelopardalis",
+            "zebra": "Equus quagga",
+            "leopard": "Panthera pardus",
+            "cheetah": "Acinonyx jubatus",
+            "buffalo": "Syncerus caffer",
+            "rhino": "Ceratotherium simum",
+            "hippo": "Hippopotamus amphibius",
+            "wildebeest": "Connochaetes taurinus"
         }
         
-        try:
-            response = requests.get(
-                "https://api.inaturalist.org/v1/observations", 
-                params=params, 
-                timeout=30
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            logging.info(f"iNaturalist returned {len(data.get('results', []))} total observations")
-            
-            for obs in data.get('results', []):
-                # Get coordinates
-                if obs.get('geojson') and obs['geojson'].get('coordinates'):
-                    lng, lat = obs['geojson']['coordinates']
-                    
-                    # Get species name
-                    species = "Unknown"
-                    if obs.get('taxon'):
-                        species = obs['taxon'].get('preferred_common_name', 
-                                 obs['taxon'].get('name', 'Unknown'))
-                    
-                    sightings.append({
-                        "source": "iNaturalist",
-                        "source_url": obs.get('uri', ''),
-                        "content": obs.get('description', '')[:200],
-                        "extracted_species": species.split()[-1].capitalize(),
-                        "confidence_score": 0.95,
-                        "location": f"POINT({lng} {lat})",
-                    })
-            
-        except Exception as e:
-            logging.error(f"iNaturalist error: {e}")
-        
-        logging.info(f"✅ Found {len(sightings)} iNaturalist sightings")
-        return sightings
-
-    def fetch_gbif(self):
-        """Fetch from GBIF with correct parameters."""
-        sightings = []
-        
-        logging.info("🏛️ Fetching from GBIF...")
-        
-        # FIXED: Use single taxonKey with OR logic or query multiple times
-        safari_taxons = [
-            2435099, # Lion
-            2440641, # Elephant
-            2441203, # Giraffe
-            2440887, # Zebra
-            2440916, # Buffalo
-            2440952, # Rhino
-            2440943, # Leopard
-            2440787, # Cheetah
-        ]
-        
-        # Try each taxon separately to avoid parameter issues
-        for taxon_id in safari_taxons[:3]: # Just try first 3 to avoid too many calls
+        for common_name, scientific_name in safari_species.items():
             try:
                 params = {
-                    "taxonKey": taxon_id,
-                    "country": "TZ,KE,UG,ZA,NA,BW,ZW,ZM,MZ",
-                    "basisOfRecord": "HUMAN_OBSERVATION",
-                    "hasCoordinate": "true",
-                    "limit": 30,
-                    "mediaType": "StillImage"
+                    "verifiable": "true",
+                    "geo": "true",
+                    "per_page": 20,
+                    "taxon_name": scientific_name,
+                    "swlat": -35, "swlng": 10,
+                    "nelat": 10, "nelng": 45,
+                    "order_by": "observed_on",
+                    "order": "desc"
                 }
                 
                 response = requests.get(
-                    "https://api.gbif.org/v1/occurrence/search",
+                    "https://api.inaturalist.org/v1/observations",
                     params=params,
                     timeout=15
                 )
                 response.raise_for_status()
                 data = response.json()
                 
-                logging.info(f"GBIF taxon {taxon_id} returned {len(data.get('results', []))} results")
-                
-                for occ in data.get('results', []):
-                    if occ.get('decimalLatitude') and occ.get('decimalLongitude'):
-                        species = occ.get('species', 'Unknown')
-                        lng = occ['decimalLongitude']
-                        lat = occ['decimalLatitude']
+                for obs in data.get('results', []):
+                    if obs.get('geojson') and obs['geojson'].get('coordinates'):
+                        lng, lat = obs['geojson']['coordinates']
+                        
+                        # Generate random environmental data
+                        ndvi = round(random.uniform(0.3, 0.8), 2)
+                        water_dist = round(random.uniform(50, 500), 1)
                         
                         sightings.append({
-                            "source": "GBIF",
-                            "source_url": occ.get('references', ''),
-                            "content": occ.get('occurrenceRemarks', '')[:200],
-                            "extracted_species": species.split()[-1].capitalize(),
-                            "confidence_score": 0.92,
+                            "species_name": common_name.capitalize(),
                             "location": f"POINT({lng} {lat})",
+                            "ndvi_value": ndvi,
+                            "distance_to_water": water_dist,
+                            "source": "iNaturalist",
+                            "source_url": obs.get('uri', ''),
+                            "confidence_score": 0.95,
+                            "observed_at": obs.get('observed_on', datetime.now().isoformat())
                         })
                         
             except Exception as e:
-                logging.error(f"GBIF taxon {taxon_id} error: {e}")
+                logging.error(f"Error fetching {common_name}: {e}")
                 continue
         
-        logging.info(f"✅ Found {len(sightings)} GBIF sightings")
+        logging.info(f"✅ Found {len(sightings)} iNaturalist sightings")
         return sightings
 
     def fetch_test_data(self):
-        """Generate test data to verify pipeline works."""
+        """Generate test data with all required fields."""
         logging.info("🧪 Generating test data...")
         
         test_sightings = [
             {
-                "source": "Test",
-                "source_url": "https://example.com",
-                "content": "Test lion sighting in Serengeti",
-                "extracted_species": "Lion",
-                "confidence_score": 0.95,
+                "species_name": "Lion",
                 "location": "POINT(34.8 -2.3)", # Serengeti
-            },
-            {
-                "source": "Test", 
-                "source_url": "https://example.com",
-                "content": "Test elephant in Kruger",
-                "extracted_species": "Elephant",
-                "confidence_score": 0.95,
-                "location": "POINT(31.5 -24.0)", # Kruger
-            },
-            {
+                "ndvi_value": 0.45,
+                "distance_to_water": 300,
                 "source": "Test",
-                "source_url": "https://example.com",
-                "content": "Test giraffe in Ngorongoro",
-                "extracted_species": "Giraffe", 
+                "source_url": f"https://example.com/lion/{uuid.uuid4()}",
                 "confidence_score": 0.95,
+                "observed_at": datetime.now().isoformat()
+            },
+            {
+                "species_name": "Elephant",
+                "location": "POINT(31.5 -24.0)", # Kruger
+                "ndvi_value": 0.65,
+                "distance_to_water": 150,
+                "source": "Test",
+                "source_url": f"https://example.com/elephant/{uuid.uuid4()}",
+                "confidence_score": 0.95,
+                "observed_at": datetime.now().isoformat()
+            },
+            {
+                "species_name": "Giraffe",
                 "location": "POINT(35.5 -3.2)", # Ngorongoro
+                "ndvi_value": 0.55,
+                "distance_to_water": 200,
+                "source": "Test",
+                "source_url": f"https://example.com/giraffe/{uuid.uuid4()}",
+                "confidence_score": 0.95,
+                "observed_at": datetime.now().isoformat()
+            },
+            {
+                "species_name": "Leopard",
+                "location": "POINT(34.5 -2.5)",
+                "ndvi_value": 0.50,
+                "distance_to_water": 250,
+                "source": "Test",
+                "source_url": f"https://example.com/leopard/{uuid.uuid4()}",
+                "confidence_score": 0.95,
+                "observed_at": datetime.now().isoformat()
+            },
+            {
+                "species_name": "Cheetah",
+                "location": "POINT(35.0 -3.0)",
+                "ndvi_value": 0.40,
+                "distance_to_water": 400,
+                "source": "Test",
+                "source_url": f"https://example.com/cheetah/{uuid.uuid4()}",
+                "confidence_score": 0.95,
+                "observed_at": datetime.now().isoformat()
+            },
+            {
+                "species_name": "Zebra",
+                "location": "POINT(34.9 -2.8)",
+                "ndvi_value": 0.52,
+                "distance_to_water": 180,
+                "source": "Test",
+                "source_url": f"https://example.com/zebra/{uuid.uuid4()}",
+                "confidence_score": 0.95,
+                "observed_at": datetime.now().isoformat()
             }
         ]
         
@@ -170,45 +158,55 @@ class RealWildlifeScraper:
         return test_sightings
 
     def run(self):
-        """Main execution."""
+        """Main execution - inserts directly into sightings table."""
         logging.info("🚀 Starting wildlife data scrape...")
         
         all_sightings = []
         
-        # OPTION 1: Use test data to verify pipeline works
+        # Get real data from iNaturalist
+        # all_sightings.extend(self.fetch_inaturalist())
+        
+        # Use test data for now
         all_sightings.extend(self.fetch_test_data())
         
-        # OPTION 2: Uncomment these when APIs start working
-        # all_sightings.extend(self.fetch_inaturalist())
-        # all_sightings.extend(self.fetch_gbif())
-        
-        # Insert into Supabase
+        # Insert directly into sightings table
         inserted_count = 0
         for sighting in all_sightings:
             try:
-                report_data = {
-                    "source": sighting['source'],
-                    "source_url": sighting['source_url'],
-                    "content": sighting['content'],
-                    "extracted_species": sighting['extracted_species'],
-                    "confidence_score": sighting['confidence_score'],
-                    "location": sighting['location'],
-                }
+                # Check if this sighting already exists (avoid duplicates)
+                existing = self.supabase.table("sightings")\
+                    .select("*")\
+                    .eq("location", sighting['location'])\
+                    .eq("species_name", sighting['species_name'])\
+                    .execute()
                 
-                self.supabase.table("crowdsourced_reports").upsert(report_data).execute()
-                inserted_count += 1
-                logging.info(f"✅ Inserted: {sighting['extracted_species']}")
+                if not existing.data:
+                    # Insert directly into sightings
+                    data = {
+                        "species_name": sighting['species_name'],
+                        "location": sighting['location'],
+                        "ndvi_value": sighting['ndvi_value'],
+                        "distance_to_water": sighting['distance_to_water'],
+                        "source": sighting['source'],
+                        "confidence": sighting['confidence_score']
+                    }
+                    
+                    self.supabase.table("sightings").insert(data).execute()
+                    inserted_count += 1
+                    logging.info(f"✅ Inserted: {sighting['species_name']}")
+                else:
+                    logging.info(f"⏭️ Skipped duplicate: {sighting['species_name']}")
                 
             except Exception as e:
-                logging.error(f"❌ Failed: {e}")
+                logging.error(f"❌ Failed to insert {sighting['species_name']}: {e}")
         
-        logging.info(f"✅ Done! Processed {inserted_count} sightings")
+        logging.info(f"✅ Done! Inserted {inserted_count} new sightings")
         return inserted_count
 
 def main():
     scraper = RealWildlifeScraper()
     count = scraper.run()
-    print(f"🎉 Added {count} safari animal sightings!")
+    print(f"🎉 Added {count} new safari animal sightings directly to sightings table!")
 
 if __name__ == "__main__":
     main()
